@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Restores binary art from text `.b64` sidecars.
+ * Restores files from text `.b64` sidecars (optionally gzip-compressed).
  * Safe to run repeatedly. Skips a target if it already exists and matches.
  */
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { gunzipSync } from "node:zlib";
 import { dirname, join } from "node:path";
 
 async function walk(dir, acc = []) {
@@ -21,7 +22,7 @@ async function walk(dir, acc = []) {
   return acc;
 }
 
-const roots = ["public", "attachments", "assets"];
+const roots = ["public", "attachments", "assets", "src", "scripts", "server"];
 const files = [];
 for (const r of roots) files.push(...(await walk(r)));
 
@@ -33,7 +34,10 @@ if (!files.length) {
 for (const f of files) {
   const out = f.slice(0, -4);
   const b64 = (await readFile(f, "utf8")).replace(/\s+/g, "");
-  const buf = Buffer.from(b64, "base64");
+  let buf = Buffer.from(b64, "base64");
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    buf = gunzipSync(buf);
+  }
   try {
     const existing = await readFile(out);
     if (existing.equals(buf)) continue;
